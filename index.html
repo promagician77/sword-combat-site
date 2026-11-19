@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Sword combat, frame by frame: a playable systems demo</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/saira-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap top-in">
+    <p class="mark">Sword combat, frame by frame</p>
+    <p class="by">Prepared by Santiago</p>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero wrap" aria-labelledby="h-hero">
+    <h1 id="h-hero">A three-hit combo, a heavy cleave and a dodge, timed to the frame</h1>
+    <p class="lede">This is a playable systems demo, not animation portfolio work. The mannequin is hand-keyed in code to show timing, and the combat animation work it reflects is under NDA, so ask to see it on a call. Everything runs on a fixed 60&nbsp;Hz simulation, so the frame data below is what you get at any refresh rate.</p>
+
+    <div class="arena-wrap">
+      <div id="arena" class="arena" tabindex="0" role="application"
+           aria-label="Combat arena. Move with W A S D or the arrow keys, J for a light attack, K for a heavy attack, Space for a dodge."
+           aria-describedby="arena-help">
+        <canvas width="1280" height="720"></canvas>
+        <div class="hud" aria-hidden="true">
+          <div class="hud-left">
+            <p id="hud-action" class="hud-action">Ready</p>
+            <p id="hud-frame" class="hud-frame">&nbsp;</p>
+            <p id="hud-foe" class="hud-foe">&nbsp;</p>
+          </div>
+          <dl class="hud-right">
+            <div><dt>Combo</dt><dd id="hud-combo">0</dd></div>
+            <div><dt>Hits</dt><dd id="hud-hits">0</dd></div>
+            <div><dt>Perfect dodges</dt><dd id="hud-perfect">0</dd></div>
+            <div><dt>Hits taken</dt><dd id="hud-taken">0</dd></div>
+          </dl>
+          <p id="hud-toast" class="hud-toast"></p>
+          <p id="hud-buffer" class="hud-buffer">&nbsp;</p>
+        </div>
+      </div>
+      <div class="meter" aria-label="Frame meter: the last 90 frames for you and the sentinel">
+        <p class="meter-label">You</p><div id="meter-you" class="meter-row"></div>
+        <p class="meter-label">Sentinel</p><div id="meter-foe" class="meter-row"></div>
+      </div>
+      <div class="controls">
+        <div class="toolbar">
+          <button id="btn-demo" type="button" aria-pressed="false">Watch the demo</button>
+          <button id="btn-slow" type="button" aria-pressed="false">Slow motion (25%)</button>
+          <button id="btn-boxes" type="button" aria-pressed="false">Show hitboxes</button>
+          <button id="btn-reset" type="button">Reset</button>
+        </div>
+        <div class="pad" aria-label="On-screen controls">
+          <button type="button" data-key="left" aria-label="Move left">&#9664;</button>
+          <button type="button" data-key="up" aria-label="Move forward">&#9650;</button>
+          <button type="button" data-key="down" aria-label="Move back">&#9660;</button>
+          <button type="button" data-key="right" aria-label="Move right">&#9654;</button>
+          <button type="button" data-key="light" class="act">Light</button>
+          <button type="button" data-key="heavy" class="act">Heavy</button>
+          <button type="button" data-key="dodge" class="act">Dodge</button>
+        </div>
+      </div>
+      <p id="arena-help" class="help">Click the arena, then use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move, <kbd>J</kbd> for light, <kbd>K</kbd> for heavy and <kbd>Space</kbd> to dodge. Press light again during a swing to chain the combo; presses up to 10 frames early are remembered. The sentinel's slam is slow to start: dodge as it comes down.</p>
+    </div>
+  </section>
+
+  <section class="wrap band" aria-labelledby="h-meter">
+    <h2 id="h-meter">Reading the frame meter</h2>
+    <div class="cols">
+      <p class="prose">Each cell is one frame at 60&nbsp;Hz, newest on the right, the way fighting games show it in training mode. It answers the questions a combat designer asks when a move feels wrong. How long is the wind-up? How long can it hit? How long are you stuck afterwards? Did the hit-stop land? Did the dodge's invulnerability cover the slam?</p>
+      <ul class="legend">
+        <li><i class="su"></i>Startup: wind-up, can't hit yet</li>
+        <li><i class="ac"></i>Active: the blade can hit</li>
+        <li><i class="re"></i>Recovery: follow-through, open to punishment</li>
+        <li><i class="hs"></i>Hit-stop: both fighters freeze on impact</li>
+        <li><i class="iv"></i>Invulnerable: dodge frames that ignore hits</li>
+        <li><i class="dv"></i>Dodge, outside the invulnerable frames</li>
+        <li><i class="ht"></i>Hit reaction</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="wrap band" aria-labelledby="h-data">
+    <h2 id="h-data">Frame data, checked by playing it</h2>
+    <p class="prose">These are the design values. A script then plays each move and watches what happens: when it first hits a target 1.6&nbsp;m ahead, which frames accept a cancel, when you can move again, and how long the freeze lasts. A tick marks each value it measured.</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Frame data table, scrolls sideways">
+    <table class="fd">
+      <thead>
+        <tr><th scope="col">Move</th><th scope="col">Startup</th><th scope="col">Active</th><th scope="col">Recovery</th><th scope="col">Total</th>
+            <th scope="col">Cancel window</th><th scope="col">Dodge cancel from</th><th scope="col">Hit-stop</th><th scope="col">First hit, measured</th></tr>
+      </thead>
+      <tbody><tr><th scope="row">Light 1</th><td>7</td><td>4 (8&ndash;11)</td><td>16</td><td class="ok">27</td><td class="ok">12&ndash;23</td><td class="ok">14</td><td class="ok">4</td><td class="ok">frame 10</td></tr><tr><th scope="row">Light 2</th><td>6</td><td>4 (7&ndash;10)</td><td>18</td><td class="ok">28</td><td class="ok">11&ndash;22</td><td class="ok">13</td><td class="ok">4</td><td class="ok">frame 8</td></tr><tr><th scope="row">Light 3, finisher</th><td>10</td><td>5 (11&ndash;15)</td><td>26</td><td class="ok">41</td><td class="ok">none</td><td class="ok">23</td><td class="ok">7</td><td class="ok">frame 13</td></tr><tr><th scope="row">Heavy</th><td>18</td><td>5 (19&ndash;23)</td><td>28</td><td class="ok">51</td><td class="ok">none</td><td class="ok">31</td><td class="ok">9</td><td class="ok">frame 21</td></tr><tr><th scope="row">Dodge</th><td colspan="3" class="ok">invulnerable on frames 4&ndash;15</td><td>24</td><td>attacks from 19</td><td></td><td></td><td></td></tr></tbody>
+    </table>
+    </div>
+    <p class="note">Frame 1 is the frame the button was pressed. A tick (&#10003;) means the script measured that value by playing the move and it matched the design; every measured value matched. Startup, active and recovery are design values. The tests check that no hit ever lands outside the active frames. Light 1's window opens on frame 8, but a target straight ahead is first hit on frame 10: the cut starts on the right side and reaches the front 2 frames later.</p>
+  </section>
+
+  <section class="wrap band" aria-labelledby="h-found">
+    <h2 id="h-found">What the measurements found</h2>
+    <div class="finding">
+      <div class="finding-text">
+        <h3>Fast swings pass through thin targets unless the blade is sampled by distance</h3>
+        <p>A strike moves the sword tip more than a metre between frames. Checked once per frame, the blade missed 370 of the 456 thin targets it actually passed through. Four checks per frame still missed 146. The build spaces checks by how far the tip moved, at most 5 cm apart. That's about 30 checks in an active frame and none outside, and it missed 2. The whole simulation, hit checks included, costs 0.021 ms a frame.</p>
+      </div>
+      <figure class="chart"><svg viewBox="0 0 520 158" role="img" aria-label="1 check per frame: 370 of 456 (81%); 2 per frame: 293 (64%); 4 per frame: 146 (32%); 8 per frame: 35 (8%); Spaced by tip distance: 2 (0.4%)"><line class="bar-axis" x1="190" x2="190" y1="0" y2="158"/><text class="bar-label" x="0" y="22">1 check per frame</text><rect x="190" y="9" width="211.0" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="409.0" y="22">370 of 456 (81%)</text><text class="bar-label" x="0" y="52">2 per frame</text><rect x="190" y="39" width="167.1" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="365.1" y="52">293 (64%)</text><text class="bar-label" x="0" y="82">4 per frame</text><rect x="190" y="69" width="83.2" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="281.2" y="82">146 (32%)</text><text class="bar-label" x="0" y="112">8 per frame</text><rect x="190" y="99" width="20.0" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="218.0" y="112">35 (8%)</text><text class="bar-label" x="0" y="142">Spaced by tip distance</text><rect x="190" y="129" width="2.0" height="18" rx="3" fill="#1F4E79"/><text class="bar-val" x="200.0" y="142">2 (0.4%)</text></svg><figcaption>Hits missed on thin targets (5&ndash;15 cm radius) that a 256-sample check catches, across all four attacks.</figcaption></figure>
+    </div>
+    <div class="finding">
+      <div class="finding-text">
+        <h3>Input read once per display frame changes the fight at 6 of 7 refresh rates</h3>
+        <p>The same 40-second scripted fight was played at seven display rates. Reading input once per display frame, like polling in <code>Update()</code>, moved presses by up to 3 frames and changed the outcome: at 30 Hz the player landed 23 hits instead of 24; at 120 Hz they took 3 hits instead of 4. Applying each key event to the frame it happened in gave the identical fight, frame for frame, at 7 of 7 rates.</p>
+      </div>
+      <figure class="chart"><svg viewBox="0 0 520 218" role="img" aria-label="30 Hz: 76 of 94; 60 Hz: 0 of 94; 75 Hz: 36 of 94; 120 Hz: 21 of 94; 144 Hz: 16 of 94; 240 Hz: 10 of 94; Jittered 4-40 ms: 59 of 94"><line class="bar-axis" x1="190" x2="190" y1="0" y2="218"/><text class="bar-label" x="0" y="22">30 Hz</text><rect x="190" y="9" width="210.2" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="408.2" y="22">76 of 94</text><text class="bar-label" x="0" y="52">60 Hz</text><rect x="190" y="39" width="2.0" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="200.0" y="52">0 of 94</text><text class="bar-label" x="0" y="82">75 Hz</text><rect x="190" y="69" width="99.6" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="297.6" y="82">36 of 94</text><text class="bar-label" x="0" y="112">120 Hz</text><rect x="190" y="99" width="58.1" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="256.1" y="112">21 of 94</text><text class="bar-label" x="0" y="142">144 Hz</text><rect x="190" y="129" width="44.3" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="242.3" y="142">16 of 94</text><text class="bar-label" x="0" y="172">240 Hz</text><rect x="190" y="159" width="27.7" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="225.7" y="172">10 of 94</text><text class="bar-label" x="0" y="202">Jittered 4-40 ms</text><rect x="190" y="189" width="163.2" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="361.2" y="202">59 of 94</text></svg><figcaption>Presses that landed on a different frame from the 60 Hz run, reading input once per display frame. With timestamped input: 0 at every rate.</figcaption></figure>
+    </div>
+    <div class="finding">
+      <div class="finding-text">
+        <h3>Blends remove the pose jumps, except dodge cancels, which snap on purpose</h3>
+        <p>With hard cuts, 42 of 126 transitions turned a joint more than 45&deg; in one frame. With blends, 3 did, and all of them were dodges cancelling out of an attack. The dodge blends in over 2 frames on purpose, because a dodge that eases in feels late. For scale, the strikes themselves turn a joint up to 102&deg; a frame. Light 2 was keyed to start where Light 1 ends, so that chain barely moves even without a blend.</p>
+      </div>
+      <figure class="chart"><svg viewBox="0 0 520 128" role="img" aria-label="Hard cuts, 95th percentile: 82&deg;; Blends, 95th percentile: 29&deg;; Hard cuts, worst: 180&deg;; Blends, worst: 92&deg;"><line class="bar-axis" x1="190" x2="190" y1="0" y2="128"/><text class="bar-label" x="0" y="22">Hard cuts, 95th percentile</text><rect x="190" y="9" width="118.4" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="316.4" y="22">82&deg;</text><text class="bar-label" x="0" y="52">Blends, 95th percentile</text><rect x="190" y="39" width="41.9" height="18" rx="3" fill="#1F4E79"/><text class="bar-val" x="239.9" y="52">29&deg;</text><text class="bar-label" x="0" y="82">Hard cuts, worst</text><rect x="190" y="69" width="260.0" height="18" rx="3" fill="#9AA4B2"/><text class="bar-val" x="458.0" y="82">180&deg;</text><text class="bar-label" x="0" y="112">Blends, worst</text><rect x="190" y="99" width="132.9" height="18" rx="3" fill="#1F4E79"/><text class="bar-val" x="330.9" y="112">92&deg;</text></svg><figcaption>Largest joint rotation in the single frame where the move changes, over 126 transitions in the scripted fight.</figcaption></figure>
+    </div>
+    <div class="finding">
+      <div class="finding-text">
+        <h3>The fastest part of every swing lands inside its active frames</h3>
+        <p>If the blade is still accelerating when the hit window closes, players see a hit that didn't count. For 4 of 4 attacks the tip's fastest frame falls inside the active window, and 46&ndash;62% of the tip's whole path is covered while the blade can hit. The rest is wind-up, follow-through and the return to guard.</p>
+      </div>
+      <figure class="chart"><svg viewBox="0 0 520 152" role="img" aria-label="Light 1: fastest frame 8, inside active frames 8 to 11; Light 2: fastest frame 7, inside active frames 7 to 10; Light 3, finisher: fastest frame 12, inside active frames 11 to 15; Heavy: fastest frame 20, inside active frames 19 to 23"><text class="bar-label" x="0" y="24">Light 1</text><rect x="150.0" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="156.6" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="163.2" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="169.8" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="176.4" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="183.0" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="189.6" y="14" width="5.6" height="12" fill="#1F9AA8"/><rect x="196.2" y="8" width="5.6" height="18" fill="#E0533C"/><rect x="202.8" y="8" width="5.6" height="18" fill="#E0533C"/><rect x="209.4" y="8" width="5.6" height="18" fill="#E0533C"/><rect x="216.0" y="8" width="5.6" height="18" fill="#E0533C"/><rect x="222.6" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="229.2" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="235.8" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="242.4" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="249.0" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="255.6" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="262.2" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="268.8" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="275.4" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="282.0" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="288.6" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="295.2" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="301.8" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="308.4" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="315.0" y="14" width="5.6" height="12" fill="#5269C8"/><rect x="321.6" y="14" width="5.6" height="12" fill="#5269C8"/><path d="M199.0 30 l-4 6 h8 z" fill="#15181E"/><text class="bar-label" x="0" y="58">Light 2</text><rect x="150.0" y="48" width="5.6" height="12" fill="#1F9AA8"/><rect x="156.6" y="48" width="5.6" height="12" fill="#1F9AA8"/><rect x="163.2" y="48" width="5.6" height="12" fill="#1F9AA8"/><rect x="169.8" y="48" width="5.6" height="12" fill="#1F9AA8"/><rect x="176.4" y="48" width="5.6" height="12" fill="#1F9AA8"/><rect x="183.0" y="48" width="5.6" height="12" fill="#1F9AA8"/><rect x="189.6" y="42" width="5.6" height="18" fill="#E0533C"/><rect x="196.2" y="42" width="5.6" height="18" fill="#E0533C"/><rect x="202.8" y="42" width="5.6" height="18" fill="#E0533C"/><rect x="209.4" y="42" width="5.6" height="18" fill="#E0533C"/><rect x="216.0" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="222.6" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="229.2" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="235.8" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="242.4" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="249.0" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="255.6" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="262.2" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="268.8" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="275.4" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="282.0" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="288.6" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="295.2" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="301.8" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="308.4" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="315.0" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="321.6" y="48" width="5.6" height="12" fill="#5269C8"/><rect x="328.2" y="48" width="5.6" height="12" fill="#5269C8"/><path d="M192.4 64 l-4 6 h8 z" fill="#15181E"/><text class="bar-label" x="0" y="92">Light 3</text><rect x="150.0" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="156.6" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="163.2" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="169.8" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="176.4" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="183.0" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="189.6" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="196.2" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="202.8" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="209.4" y="82" width="5.6" height="12" fill="#1F9AA8"/><rect x="216.0" y="76" width="5.6" height="18" fill="#E0533C"/><rect x="222.6" y="76" width="5.6" height="18" fill="#E0533C"/><rect x="229.2" y="76" width="5.6" height="18" fill="#E0533C"/><rect x="235.8" y="76" width="5.6" height="18" fill="#E0533C"/><rect x="242.4" y="76" width="5.6" height="18" fill="#E0533C"/><rect x="249.0" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="255.6" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="262.2" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="268.8" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="275.4" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="282.0" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="288.6" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="295.2" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="301.8" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="308.4" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="315.0" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="321.6" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="328.2" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="334.8" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="341.4" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="348.0" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="354.6" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="361.2" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="367.8" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="374.4" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="381.0" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="387.6" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="394.2" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="400.8" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="407.4" y="82" width="5.6" height="12" fill="#5269C8"/><rect x="414.0" y="82" width="5.6" height="12" fill="#5269C8"/><path d="M225.4 98 l-4 6 h8 z" fill="#15181E"/><text class="bar-label" x="0" y="126">Heavy</text><rect x="150.0" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="156.6" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="163.2" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="169.8" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="176.4" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="183.0" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="189.6" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="196.2" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="202.8" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="209.4" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="216.0" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="222.6" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="229.2" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="235.8" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="242.4" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="249.0" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="255.6" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="262.2" y="116" width="5.6" height="12" fill="#1F9AA8"/><rect x="268.8" y="110" width="5.6" height="18" fill="#E0533C"/><rect x="275.4" y="110" width="5.6" height="18" fill="#E0533C"/><rect x="282.0" y="110" width="5.6" height="18" fill="#E0533C"/><rect x="288.6" y="110" width="5.6" height="18" fill="#E0533C"/><rect x="295.2" y="110" width="5.6" height="18" fill="#E0533C"/><rect x="301.8" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="308.4" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="315.0" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="321.6" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="328.2" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="334.8" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="341.4" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="348.0" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="354.6" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="361.2" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="367.8" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="374.4" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="381.0" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="387.6" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="394.2" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="400.8" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="407.4" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="414.0" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="420.6" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="427.2" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="433.8" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="440.4" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="447.0" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="453.6" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="460.2" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="466.8" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="473.4" y="116" width="5.6" height="12" fill="#5269C8"/><rect x="480.0" y="116" width="5.6" height="12" fill="#5269C8"/><path d="M278.2 132 l-4 6 h8 z" fill="#15181E"/></svg><figcaption>Startup, active and recovery frames for each attack (taller cells are active). The marker is the frame where the sword tip moves fastest.</figcaption></figure>
+    </div>
+    <table class="measured">
+      <tbody>
+        <tr><th scope="row">Tests</th><td>21 tests, 0 failing</td></tr>
+        <tr><th scope="row">Planted bugs caught by the tests</th><td>21 of 21, from a buffer one frame short to a dodge that loses its last invulnerable frame</td></tr>
+        <tr><th scope="row">Input buffer</th><td>a press up to 10 frames before a window opens still fires on its first frame</td></tr>
+        <tr><th scope="row">Dodge invulnerability, measured</th><td>frames 4 to 15; hits landed on frames either side</td></tr>
+        <tr><th scope="row">Simulation cost</th><td>0.021 ms per frame in Node, hit checks included</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="wrap band" aria-labelledby="h-unity">
+    <h2 id="h-unity">How each piece maps to Unity</h2>
+    <p class="prose">This demo is JavaScript so it runs in a browser. In your Unity project the same ideas would be built like this. It's a plan, not tested Unity code.</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Unity mapping table, scrolls sideways">
+    <table class="map">
+      <thead><tr><th scope="col">Here</th><th scope="col">In Unity</th></tr></thead>
+      <tbody>
+        <tr><td>Frame data in one table, a fixed 60&nbsp;Hz combat tick</td><td>Frame data in ScriptableObjects; a combat tick in <code>FixedUpdate</code> at 1/60&nbsp;s, counting frames rather than reading normalised clip time</td></tr>
+        <tr><td>Key presses applied to the frame they happened in</td><td>Queue Input System callbacks with <code>context.time</code> and apply each on the tick it belongs to, so combos don't depend on frame rate</td></tr>
+        <tr><td>Cancel windows and buffered presses</td><td>Windows checked against the tick count on the state; a small buffer of recent presses consumed when a window opens</td></tr>
+        <tr><td>Blade hitbox that follows the animated sword</td><td>Points along the weapon bone, swept between last and current pose with several <code>Physics.OverlapCapsule</code> or <code>CapsuleCast</code> checks, spaced by distance</td></tr>
+        <tr><td>Hit-stop freezing both fighters</td><td><code>Animator.speed = 0</code> on attacker and target for N ticks, not <code>Time.timeScale</code>, which would also freeze the camera shake and UI</td></tr>
+        <tr><td>Blends per transition, short ones on purpose for dodges and hit reactions</td><td>Animator transitions with fixed durations, interruption sources for cancels, or <code>CrossFadeInFixedTime</code> from code</td></tr>
+        <tr><td>Lunge distance per frame</td><td>Root motion from the clip through <code>OnAnimatorMove</code>, or a curve driving <code>CharacterController.Move</code></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="wrap band" aria-labelledby="h-not">
+    <h2 id="h-not">Not measured</h2>
+    <ul class="prose not">
+      <li>This is not Unity. It is JavaScript and three.js, so it runs in a browser. The Unity column above is a plan.</li>
+      <li>The mannequin animation is hand-keyed in code: no rig, no IK, no foot locking, no mocap. It shows timing and readability, not the polish bar for a shipped game.</li>
+      <li>One enemy with simple, seeded behaviour. No physics engine and no networking.</li>
+      <li>The thin-target "truth" is 256 blade samples per frame, not an exact swept-volume test.</li>
+      <li>Refresh rates were simulated by feeding the driver frame times; no real monitors were used.</li>
+      <li>Costs were measured in Node on a 2-core sandbox, not on target hardware. Screenshots used software WebGL.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>Prepared by Santiago. Built with three.js; all numbers come from <code>results/</code> and are rebuilt by <code>tools/run_all.sh</code>.</p>
+</footer>
+<script type="module" src="js/game.mjs"></script>
+</body>
+</html>
