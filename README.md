@@ -1,7 +1,7 @@
 # Sword combat, frame by frame: demo page
 
 Static files, no build step: `index.html`, `style.css`, `js/`, `combat/`, `vendor/three.*.js`, `fonts/`, `data/`.
-Deploy with Vercel; `vercel.json` sends `X-Robots-Tag: noindex, nofollow`. Prepared by Santiago.
+Deploy with Vercel; `vercel.json` sends `X-Robots-Tag: noindex, nofollow`. Prepared by Carter.
 
 ## Measured
 
